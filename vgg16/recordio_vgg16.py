@@ -12,7 +12,7 @@ import functools
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument(
-    '--batch_size', type=int, default=16, help="Batch size for training.")
+    '--batch_size', type=int, default=12, help="Batch size for training.")
 parser.add_argument(
     '--learning_rate',
     type=float,
@@ -82,12 +82,8 @@ def main():
             data_shape = [224, 224, 3]
 
     # Input data
-    """
-    images = fluid.layers.data(name='pixel', shape=data_shape, dtype='float32')
-    label = fluid.layers.data(name='label', shape=[1], dtype='int64')
-    """
     data_file = fluid.layers.open_recordio_file(
-            filename='/paddle/fengjiayi/data/flowers_recordio/train.recordio',
+            filename='./train.recordio',
             shapes=[[-1, 3, 224, 224], [-1, 1]],
             lod_levels=[0, 0],
             dtypes=['float32', 'int64'])
@@ -123,36 +119,6 @@ def main():
     # Parameter initialization
     exe.run(fluid.default_startup_program())
 
-    # data reader
-    """
-    train_reader = paddle.batch(
-        paddle.reader.shuffle(
-            paddle.dataset.cifar.train10()
-            if args.data_set == 'cifar10' else paddle.dataset.flowers.train(),
-            buf_size=5120),
-        batch_size=args.batch_size)
-    """
-    test_reader = paddle.batch(
-        paddle.dataset.cifar.test10()
-        if args.data_set == 'cifar10' else paddle.dataset.flowers.test(),
-        batch_size=args.batch_size)
-
-    # test
-    def test(exe):
-        test_accuracy = fluid.average.WeightedAverage()
-        for batch_id, data in enumerate(test_reader()):
-            img_data = np.array(map(lambda x: x[0].reshape(data_shape),
-                                    data)).astype("float32")
-            y_data = np.array(map(lambda x: x[1], data)).astype("int64")
-            y_data = y_data.reshape([-1, 1])
-
-            acc, weight = exe.run(inference_program,
-                            feed={"pixel": img_data,
-                                  "label": y_data},
-                            fetch_list=[batch_acc, batch_size_tensor])
-            test_accuracy.add(value=acc, weight=weight)
-        return test_accuracy.eval()
-
     iters = 0
     accuracy = fluid.average.WeightedAverage()
     for pass_id in range(args.num_passes):
@@ -161,14 +127,6 @@ def main():
         num_samples = 0
         accuracy.reset()
         while not data_file.eof():
-        # for batch_id, data in enumerate(train_reader()):
-            """
-            img_data = np.array(map(lambda x: x[0].reshape(data_shape),
-                                    data)).astype("float32")
-            y_data = np.array(map(lambda x: x[1], data)).astype("int64")
-            y_data = y_data.reshape([-1, 1])
-            """
-
             loss, acc, weight = exe.run(fluid.default_main_program(),
                                 fetch_list=[avg_cost, batch_acc, batch_size_tensor])
             accuracy.add(value=acc, weight=weight)
@@ -181,7 +139,6 @@ def main():
 
         pass_elapsed = time.time() - start_time
         pass_train_acc = accuracy.eval()
-        # pass_test_acc = test(exe)
         print(
             "Pass = %d, Training performance = %f imgs/s, Train accuracy = %f\n"
             % (pass_id, num_samples / pass_elapsed, pass_train_acc))
